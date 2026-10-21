@@ -38,6 +38,10 @@ public class SqliteCacheStorageTest
     public async Task Cleanup()
     {
         _storage.Dispose();
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_testDbPath}");
+        Microsoft.Data.Sqlite.SqliteConnection.ClearPool(connection);
+        using var pooledConnection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_testDbPath};Pooling=True");
+        Microsoft.Data.Sqlite.SqliteConnection.ClearPool(pooledConnection);
 
         var testDir = Path.GetDirectoryName(_testDbPath);
         if (testDir != null && Directory.Exists(testDir))
@@ -365,6 +369,39 @@ public class SqliteCacheStorageTest
     #endregion
 
     #region Expiration Tests
+
+    [TestMethod]
+    public async Task DeleteExpiredAsyncUsesProvidedTimeAndSubsecondPrecision()
+    {
+        var now = new DateTime(2030, 1, 2, 3, 4, 5, 500, DateTimeKind.Utc);
+        foreach (var (key, expiration) in new[] { ("expired", now.AddMilliseconds(-100)), ("valid", now.AddMilliseconds(100)) })
+        {
+            await _storage.UpsertAsync(new CacheEntry
+            {
+                CacheKey = key, ContentType = "String", ContentHash = key,
+                EntryType = EntryType.Inline, Data = [1], DataSize = 1, ExpiresAt = expiration
+            }, default);
+        }
+
+        Assert.AreEqual(1, await _storage.DeleteExpiredAsync(now, default));
+        Assert.IsNull(await _storage.LookupAsync("expired", default));
+        Assert.IsNotNull(await _storage.LookupAsync("valid", default));
+    }
+
+    [TestMethod]
+    public async Task StartupCleanupAndStatisticsRecognizeIso8601Expiration()
+    {
+        await _storage.UpsertAsync(new CacheEntry
+        {
+            CacheKey = "expired", ContentType = "String", ContentHash = "expired",
+            EntryType = EntryType.Inline, Data = [1], DataSize = 1,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(-1)
+        }, default);
+
+        Assert.AreEqual(1L, (await _storage.GetStatsAsync(default)).ExpiredEntries);
+        await _storage.CleanupStartupAsync();
+        Assert.IsNull(await _storage.LookupAsync("expired", default));
+    }
 
     [TestMethod]
     public async Task DeleteExpriedAsync_ShouldRemoveExpiredEntries()

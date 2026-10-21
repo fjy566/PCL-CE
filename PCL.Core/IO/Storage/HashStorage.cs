@@ -35,16 +35,39 @@ public class HashStorage(string folder, IHashProvider hashProvider, bool compres
         if (hash is not null && hash.Length != hashProvider.Length)
             throw new ArgumentException("Provide hash is not correct", nameof(hash));
 
+        // Hashing consumes the stream. Spool forward-only streams to disk so large
+        // downloads can be hashed and copied without buffering them in memory.
+        if (hash is null && !input.CanSeek)
+        {
+            await using var buffered = new FileStream(Path.GetTempFileName(), FileMode.Open,
+                FileAccess.ReadWrite, FileShare.None, 81920,
+                FileOptions.Asynchronous | FileOptions.DeleteOnClose);
+            await input.CopyToAsync(buffered).ConfigureAwait(false);
+            return await PutAsync(buffered).ConfigureAwait(false);
+        }
+
         if (input.CanSeek) input.Position = 0;
 
         var fileHash = hash ?? (await hashProvider.ComputeHashAsync(input).ConfigureAwait(false)).ToHexString();
+        if (input.CanSeek) input.Position = 0;
         var destPath = _GetDestPath(fileHash);
         //纠正: 由于之前错误设计导致的文件访问效率低下的文件结构
         if (correctMisplacedFile && _CorrectMisplacedFile(fileHash)) LogWrapper.Info("HashStorage", "Move misplaced file into correct folder");
         //检查是否已存在保存的文件
         if (File.Exists(destPath)) return fileHash;
-        await using var destinationFs = _GetSaveStream(destPath);
-        await input.CopyToAsync(destinationFs).ConfigureAwait(false);
+        // Publish only a completed object, including the compression footer.
+        var tempPath = destPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            await using (var destinationFs = _GetSaveStream(tempPath))
+                await input.CopyToAsync(destinationFs).ConfigureAwait(false);
+            try { File.Move(tempPath, destPath); }
+            catch (IOException) when (File.Exists(destPath)) { /* Another writer stored this object. */ }
+        }
+        finally
+        {
+            File.Delete(tempPath);
+        }
         return fileHash;
     }
 

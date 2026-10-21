@@ -293,8 +293,11 @@ public static class Files {
 
         if (append) {
             // 编码检测使用 stream 而不是完整读取内容以避免多余的内存占用
-            await using (var fileStream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                encoding ??= EncodingDetector.DetectEncoding(fileStream);
+            if (encoding is null && File.Exists(fullPath)) {
+                await using var fileStream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                encoding = EncodingDetector.DetectEncoding(fileStream);
+            }
+            encoding ??= new UTF8Encoding(false);
             // 注：从此处开始，编码检测使用的 stream 已经销毁
             await File.AppendAllTextAsync(fullPath, text, encoding, cancelToken);
         } else {
@@ -379,6 +382,7 @@ public static class Files {
         }
 
         try {
+            cancellationToken.ThrowIfCancellationRequested();
             Directory.CreateDirectory(destDirectory); // 创建目标目录（同步操作，因为通常很快且无异步版本）
 
             if (compressFilePath.EndsWithF(".gz") || compressFilePath.EndsWithF(".tgz")) {
@@ -497,7 +501,7 @@ public static class Files {
     /// </summary>
     /// <param name="tarStream">要解压的 Tar 输入流。</param>
     /// <param name="destDirectory">目标解压目录。</param>
-    /// <param name="progressIncrementHandler">进度更新回调，接收 0.0 到 1.0 的进度值（基于条目计数）。</param>
+    /// <param name="progressIncrementHandler">流式读取时无法预知总长度，仅在开始和完成时报告 0.0 和 1.0。</param>
     /// <param name="cancellationToken">用于取消操作的令牌。</param>
     /// <exception cref="OperationCanceledException">如果操作被取消。</exception>
     /// <exception cref="InvalidOperationException">如果路径不合法或解压失败。</exception>
@@ -508,22 +512,8 @@ public static class Files {
         Action<double>? progressIncrementHandler,
         CancellationToken cancellationToken)
     {
-        var entries = new List<TarEntry>();
-        long totalBytes = 0;
-
-        while (await _GetNextEntryAsync(tarStream, cancellationToken).ConfigureAwait(false) is { } entry)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            entries.Add(entry);
-            totalBytes += entry.Size;
-        }
-
-        long processedBytes = 0;
-
-        tarStream.Reset(); // 重置流以重新读取条目
-
-        foreach (var entry in entries)
+        progressIncrementHandler?.Invoke(0.0);
+        while (await tarStream.GetNextEntryAsync(cancellationToken).ConfigureAwait(false) is { } entry)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -553,9 +543,6 @@ public static class Files {
                 await tarStream
                     .CopyEntryContentsAsync(outputStream, cancellationToken)
                     .ConfigureAwait(false);
-
-                processedBytes += entry.Size;
-                progressIncrementHandler?.Invoke((double)processedBytes / totalBytes);
             }
             catch (IOException ex)
             {
@@ -564,20 +551,7 @@ public static class Files {
                     ex);
             }
         }
-    }
-
-    private static async Task<TarEntry?> _GetNextEntryAsync(
-        TarInputStream tarStream,
-        CancellationToken cancellationToken)
-    {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-        var task = Task.Run(tarStream.GetNextEntry, cts.Token);
-
-        if (await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(10), cts.Token)).ConfigureAwait(false) == task)
-            return await task.ConfigureAwait(false);
-
-        throw new TimeoutException("Operation timed out while reading next Tar entry.");
+        progressIncrementHandler?.Invoke(1.0);
     }
 
     private static string _GetSafePath(
@@ -621,11 +595,14 @@ public static class Files {
 
         foreach (ZipEntry entry in zipFile)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var destinationPath = _GetSafePath(destDirectory, entry.Name);
 
             if (entry.IsDirectory)
             {
                 Directory.CreateDirectory(destinationPath);
+                currentEntry++;
+                progressIncrementHandler?.Invoke((double)currentEntry / totalEntries);
                 continue;
             }
 
@@ -641,6 +618,7 @@ public static class Files {
             currentEntry++;
             progressIncrementHandler?.Invoke((double)currentEntry / totalEntries);
         }
+        progressIncrementHandler?.Invoke(1.0);
     }
 
     #endregion

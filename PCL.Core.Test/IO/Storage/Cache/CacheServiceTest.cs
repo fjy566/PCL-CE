@@ -61,6 +61,10 @@ public class CacheServiceTest
         }
 
         // Clean up the test directory
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_options.DatabasePath}");
+        Microsoft.Data.Sqlite.SqliteConnection.ClearPool(connection);
+        using var pooledConnection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_options.DatabasePath};Pooling=True");
+        Microsoft.Data.Sqlite.SqliteConnection.ClearPool(pooledConnection);
         if (Directory.Exists(_testCacheDir))
         {
             Directory.Delete(_testCacheDir, true);

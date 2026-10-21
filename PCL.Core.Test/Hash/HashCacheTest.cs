@@ -26,6 +26,8 @@ public class HashCacheTest
     [TestCleanup]
     public void Cleanup()
     {
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Combine(_tempDir, ".hash_cache.db")};Pooling=True");
+        Microsoft.Data.Sqlite.SqliteConnection.ClearPool(connection);
         if (Directory.Exists(_tempDir))
             Directory.Delete(_tempDir, true);
     }

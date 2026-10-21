@@ -77,6 +77,8 @@ public class LocalizationTest
     [TestMethod]
     public void FontProfileShouldFollowCultureGlyphStandard()
     {
+        // WPF normally registers this parser during Application startup.
+        _ = System.IO.Packaging.PackUriHelper.UriSchemePack;
         Assert.AreEqual(LocalizationFontProfile.SimplifiedChinese,
             LocalizationFontService.ResolveProfileFromCultureName("zh-CN"));
         Assert.AreEqual(LocalizationFontProfile.SimplifiedChinese,

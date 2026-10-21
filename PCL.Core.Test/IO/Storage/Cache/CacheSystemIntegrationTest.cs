@@ -46,6 +46,10 @@ public class CacheSystemIntegrationTest
             await _cache.DisposeAsync();
         }
 
+        using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_options.DatabasePath}");
+        Microsoft.Data.Sqlite.SqliteConnection.ClearPool(connection);
+        using var pooledConnection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={_options.DatabasePath};Pooling=True");
+        Microsoft.Data.Sqlite.SqliteConnection.ClearPool(pooledConnection);
         if (Directory.Exists(_testCacheDir))
         {
             // Wait for file locks to be released

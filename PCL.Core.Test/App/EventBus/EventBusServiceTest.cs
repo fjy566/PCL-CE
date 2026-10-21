@@ -8,6 +8,9 @@ namespace PCL.Core.Test.App.EventBus;
 [TestClass]
 public class EventBusServiceTest
 {
+    [TestInitialize]
+    public void Initialize() => _ = new EventBusService();
+
     private record MyEvent(Guid Id, string Name, int Value) : EventDataBase(Id, Name);
 
     [TestMethod]
