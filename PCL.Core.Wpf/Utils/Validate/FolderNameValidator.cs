@@ -2,39 +2,41 @@ using System;
 using System.IO;
 using System.Linq;
 using FluentValidation;
-using FluentValidation.Results;
-using PCL.Core.App.Localization;
 using PCL.Core.Utils.Exts;
 
 namespace PCL.Core.Utils.Validate;
 
-public class FolderNameValidator(
-    string? parentFolder = null,
-    bool useMinecraftCharCheck = true,
-    bool ignoreCase = true,
-    bool ignoreSameNameInParentFolder = false)
-    : FileSystemValidator
+public class FolderNameValidator : FileSystemValidator
 {
     public FolderNameValidator() : this(null)
     {
     }
 
-    public bool UseMinecraftCharCheck { get; set; } = useMinecraftCharCheck;
-    public bool IgnoreCase { get; set; } = ignoreCase;
-    public bool IgnoreSameNameInParentFolder { get; set; } = ignoreSameNameInParentFolder;
-    public string? ParentFolder { get; set; } = parentFolder;
+    public bool UseMinecraftCharCheck { get; set; }
+    public bool IgnoreCase { get; set; }
+    public bool IgnoreSameNameInParentFolder { get; set; }
+    public string? ParentFolder { get; set; }
 
-    private void _BuildRules()
+    public FolderNameValidator(string? parentFolder = null,
+        bool useMinecraftCharCheck = true,
+        bool ignoreCase = true,
+        bool ignoreSameNameInParentFolder = false)
     {
+        UseMinecraftCharCheck = useMinecraftCharCheck;
+        IgnoreCase = ignoreCase;
+        IgnoreSameNameInParentFolder = ignoreSameNameInParentFolder;
+        ParentFolder = parentFolder;
+
         RuleFor(x => x)
+            .Cascade(CascadeMode.Stop)
             .Must(x => !string.IsNullOrWhiteSpace(x))
-            .WithMessage(_ => Lang.Text("Common.Validate.Empty"))
+            .WithMessage(_ => ValidationMessage.Text("Common.Validate.Empty"))
             .Must(x => !x.StartsWith(' '))
-            .WithMessage(_ => Lang.Text("Common.Validate.FolderName.StartsWithSpace"))
+            .WithMessage(_ => ValidationMessage.Text("Common.Validate.FolderName.StartsWithSpace"))
             .Must(x => !x.EndsWith(' '))
-            .WithMessage(_ => Lang.Text("Common.Validate.FolderName.EndsWithSpace"))
+            .WithMessage(_ => ValidationMessage.Text("Common.Validate.FolderName.EndsWithSpace"))
             .Must(x => !x.EndsWith('.'))
-            .WithMessage(_ => Lang.Text("Common.Validate.FolderName.EndsWithDot"))
+            .WithMessage(_ => ValidationMessage.Text("Common.Validate.FolderName.EndsWithDot"))
             .Custom((fileName, context) =>
             {
                 var invalidChar = CheckInvalidStrings(
@@ -42,17 +44,17 @@ public class FolderNameValidator(
                     UseMinecraftCharCheck ? ["!;"] : []);
                 if (invalidChar is not null)
                     context.AddFailure(
-                        Lang.Text("Common.Validate.FolderName.InvalidChar", invalidChar));
+                        ValidationMessage.Text("Common.Validate.FolderName.InvalidChar", invalidChar));
             })
             .Custom((fileName, context) =>
             {
                 var reservedWord = CheckReservedWord(fileName, []);
                 if (reservedWord is not null)
                     context.AddFailure(
-                        Lang.Text("Common.Validate.FolderName.ReservedWord", reservedWord));
+                        ValidationMessage.Text("Common.Validate.FolderName.ReservedWord", reservedWord));
             })
             .Must(x => !x.IsMatch(RegexPatterns.Ntfs83FileName))
-            .WithMessage(_ => Lang.Text("Common.Validate.FolderName.SpecialFormat"))
+            .WithMessage(_ => ValidationMessage.Text("Common.Validate.FolderName.SpecialFormat"))
             .Must(x =>
             {
                 if (ParentFolder is null) return true;
@@ -68,12 +70,7 @@ public class FolderNameValidator(
                         x,
                         IgnoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
             })
-            .WithMessage(_ => Lang.Text("Common.Validate.FolderName.Duplicate"));
+            .WithMessage(_ => ValidationMessage.Text("Common.Validate.FolderName.Duplicate"));
     }
 
-    protected override bool PreValidate(ValidationContext<string> context, ValidationResult result)
-    {
-        _BuildRules();
-        return base.PreValidate(context, result);
-    }
 }

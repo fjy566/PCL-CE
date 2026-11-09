@@ -18,7 +18,11 @@ public static class ToastNotification
     /// <param name="title">通知标题</param>
     public static void SendToast(string message, string title = "Notice")
     {
-        var xml = $"""
+        SendToastFromTemplate(BuildTemplate(message, title));
+    }
+
+    internal static string BuildTemplate(string message, string title) =>
+        $"""
                    <toast>
                        <visual>
                            <binding template="ToastGeneric">
@@ -28,9 +32,6 @@ public static class ToastNotification
                        </visual>
                    </toast>
                    """;
-
-        SendToastFromTemplate(xml);
-    }
 
     /// <summary>
     /// 根据模板发送 Toast 通知。

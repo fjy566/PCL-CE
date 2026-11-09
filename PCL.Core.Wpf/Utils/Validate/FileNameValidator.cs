@@ -2,18 +2,11 @@ using System;
 using System.IO;
 using System.Linq;
 using FluentValidation;
-using FluentValidation.Results;
-using PCL.Core.App.Localization;
 using PCL.Core.Utils.Exts;
 
 namespace PCL.Core.Utils.Validate;
 
-public class FileNameValidator(
-    string? parentFolder = null,
-    bool ignoreCase = true,
-    bool useMinecraftCharCheck = true,
-    bool requireParentFolderExists = true)
-    : FileSystemValidator
+public class FileNameValidator : FileSystemValidator
 {
     private bool? _isParentFolderExists;
 
@@ -21,22 +14,31 @@ public class FileNameValidator(
     {
     }
 
-    public bool UseMinecraftCharCheck { get; set; } = useMinecraftCharCheck;
-    public bool IgnoreCase { get; set; } = ignoreCase;
-    public string? ParentFolder { get; set; } = parentFolder;
-    public bool RequireParentFolderExists { get; set; } = requireParentFolderExists;
+    public bool UseMinecraftCharCheck { get; set; }
+    public bool IgnoreCase { get; set; }
+    public string? ParentFolder { get; set; }
+    public bool RequireParentFolderExists { get; set; }
 
-    private void _BuildRules()
+    public FileNameValidator(string? parentFolder = null,
+        bool ignoreCase = true,
+        bool useMinecraftCharCheck = true,
+        bool requireParentFolderExists = true)
     {
+        UseMinecraftCharCheck = useMinecraftCharCheck;
+        IgnoreCase = ignoreCase;
+        ParentFolder = parentFolder;
+        RequireParentFolderExists = requireParentFolderExists;
+
         RuleFor(x => x)
+            .Cascade(CascadeMode.Stop)
             .Must(x => !string.IsNullOrWhiteSpace(x))
-            .WithMessage(_ => Lang.Text("Common.Validate.Empty"))
+            .WithMessage(_ => ValidationMessage.Text("Common.Validate.Empty"))
             .Must(x => !x.StartsWith(' '))
-            .WithMessage(_ => Lang.Text("Common.Validate.FileName.StartsWithSpace"))
+            .WithMessage(_ => ValidationMessage.Text("Common.Validate.FileName.StartsWithSpace"))
             .Must(x => !x.EndsWith(' '))
-            .WithMessage(_ => Lang.Text("Common.Validate.FileName.EndsWithSpace"))
+            .WithMessage(_ => ValidationMessage.Text("Common.Validate.FileName.EndsWithSpace"))
             .Must(x => !x.EndsWith('.'))
-            .WithMessage(_ => Lang.Text("Common.Validate.FileName.EndsWithDot"))
+            .WithMessage(_ => ValidationMessage.Text("Common.Validate.FileName.EndsWithDot"))
             .Custom((fileName, context) =>
             {
                 var invalidChar = CheckInvalidStrings(
@@ -44,17 +46,17 @@ public class FileNameValidator(
                     UseMinecraftCharCheck ? ["!;"] : []);
                 if (invalidChar is not null)
                     context.AddFailure(
-                        Lang.Text("Common.Validate.FileName.InvalidChar", invalidChar));
+                        ValidationMessage.Text("Common.Validate.FileName.InvalidChar", invalidChar));
             })
             .Custom((fileName, context) =>
             {
                 var reservedWord = CheckReservedWord(fileName, []);
                 if (reservedWord is not null)
                     context.AddFailure(
-                        Lang.Text("Common.Validate.FileName.ReservedWord", reservedWord));
+                        ValidationMessage.Text("Common.Validate.FileName.ReservedWord", reservedWord));
             })
             .Must(x => !x.IsMatch(RegexPatterns.Ntfs83FileName))
-            .WithMessage(_ => Lang.Text("Common.Validate.FileName.SpecialFormat"))
+            .WithMessage(_ => ValidationMessage.Text("Common.Validate.FileName.SpecialFormat"))
             .Must(x =>
             {
                 _isParentFolderExists = null;
@@ -73,13 +75,8 @@ public class FileNameValidator(
                 return !RequireParentFolderExists;
             })
             .WithMessage(_ => _isParentFolderExists is not null
-                ? Lang.Text("Common.Validate.FileName.ParentFolderMissing", ParentFolder)
-                : Lang.Text("Common.Validate.FileName.Duplicate"));
+                ? ValidationMessage.Text("Common.Validate.FileName.ParentFolderMissing", ParentFolder)
+                : ValidationMessage.Text("Common.Validate.FileName.Duplicate"));
     }
 
-    protected override bool PreValidate(ValidationContext<string> context, ValidationResult result)
-    {
-        _BuildRules();
-        return base.PreValidate(context, result);
-    }
 }

@@ -1,4 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System.Linq;
+using System.Xml.Linq;
 
 using static PCL.Core.UI.ToastNotification;
 
@@ -8,9 +10,12 @@ namespace PCL.Core.Test;
 public class ToastTest
 {
     [TestMethod]
-    public void TestToast()
+    public void ToastTemplatePreservesTextAndEscapesXmlMarkup()
     {
-        // 别跑会炸，因为 Basics.cs 的 Metadata 需要在运行时加载，单元测试项目无法访问
-        SendToast("A toast notice from PCL.Core!", "Test Toast");
+        const string title = "A <title> & \"quote\"";
+        const string message = "正文 & <text>";
+        var template = XDocument.Parse(BuildTemplate(message, title));
+        Assert.AreEqual("ToastGeneric", template.Descendants("binding").Single().Attribute("template")?.Value);
+        CollectionAssert.AreEqual(new[] { title, message }, template.Descendants("text").Select(node => node.Value).ToArray());
     }
 }

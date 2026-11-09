@@ -1,7 +1,5 @@
 using System;
-using System.Buffers.Binary;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Ae.Dns.Protocol.Enums;
 using Ae.Dns.Protocol.Records;
@@ -27,15 +25,17 @@ public class DoHQueryTest
     public async Task TestSrvQuery()
     {
         var query = DnsQuery.Instance;
-        var addr = await query.QueryAsync("_minecraft._tcp.mc.hdeda6e85.nyat.app", DnsQueryType.SRV, TestContext.CancellationTokenSource.Token);
+        var addr = await query.QueryAsync("_xmpp-server._tcp.jabber.org", DnsQueryType.SRV, TestContext.CancellationTokenSource.Token);
         Assert.IsNotNull(addr);
         Assert.IsGreaterThan(0, addr.Answers.Count);
         Assert.AreEqual(DnsQueryClass.IN, addr.Header.QueryClass);
-        var record = addr.Answers.FirstOrDefault()?.Resource as DnsUnknownResource;
+        var record = addr.Answers.FirstOrDefault(answer => answer.Type == DnsQueryType.SRV)?.Resource as DnsUnknownResource;
         Assert.IsNotNull(record);
         var srvRecord = new DnsSrvResource();
         var offset = 0;
         srvRecord.ReadBytes(record.Raw, ref offset, record.Raw.Length);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(srvRecord.Target));
+        Assert.IsGreaterThan(0, srvRecord.Port);
         Console.WriteLine(srvRecord.Target);
         Console.WriteLine(srvRecord.Port);
     }

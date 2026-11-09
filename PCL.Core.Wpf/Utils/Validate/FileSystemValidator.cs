@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -38,7 +39,7 @@ public abstract class FileSystemValidator : AbstractValidator<string>
         ];
         reserved = reserved.Concat(extraReservedWords);
 
-        var matched = reserved.FirstOrDefault(r => r.Equals(nameWithoutExtension));
+        var matched = reserved.FirstOrDefault(r => r.Equals(nameWithoutExtension, StringComparison.OrdinalIgnoreCase));
 
         return matched ?? null;
     }

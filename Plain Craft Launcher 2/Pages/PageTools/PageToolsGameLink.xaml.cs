@@ -429,6 +429,12 @@ public partial class PageToolsGameLink : IPageView
     private void GetAnnouncement()
     {
         var requestId = Volatile.Read(ref _announcementRequestId);
+        if (Secrets.LinkServers.Length == 0)
+        {
+            ShowAnnouncementConnectionFailure(requestId);
+            return;
+        }
+
         Common.RunInNewThread(() =>
         {
             try
@@ -481,7 +487,7 @@ public partial class PageToolsGameLink : IPageView
                     }
                     catch (Exception ex)
                     {
-                        LogWrapper.Error(ex, $"[Link] Failed to get announcement from server {serverNumber}");
+                        LogWrapper.Warn(ex, $"[Link] Failed to get announcement from server {serverNumber}");
                         if (!TryApplyCurrentAnnouncementRequest(requestId, () =>
                             {
                                 States.Link.AnnounceCacheConfig.Reset();
@@ -605,18 +611,22 @@ public partial class PageToolsGameLink : IPageView
             }
             catch (Exception ex)
             {
-                if (!IsCurrentAnnouncementRequest(requestId)) return;
-                LobbyInfoProvider.IsLobbyAvailable = false;
-                Common.RunInUi(() =>
-                {
-                    if (!IsCurrentAnnouncementRequest(requestId)) return;
-                    _announcementLoadState = AnnouncementLoadState.Failed;
-                    _vm.HintAnnounceVisibility = Visibility.Visible;
-                    HintAnnounce.Theme = MyHint.Themes.Red;
-                    _vm.HintAnnounceText = Lang.Text("Tools.GameLink.Error.ConnectFailed");
-                });
-                LogWrapper.Error(ex, "[Link] Failed to get lobby announcement");
+                ShowAnnouncementConnectionFailure(requestId);
+                LogWrapper.Warn(ex, "[Link] Failed to get lobby announcement");
             }
+        });
+    }
+
+    private void ShowAnnouncementConnectionFailure(int requestId)
+    {
+        Common.RunInUi(() =>
+        {
+            if (!IsCurrentAnnouncementRequest(requestId)) return;
+            LobbyInfoProvider.IsLobbyAvailable = false;
+            _announcementLoadState = AnnouncementLoadState.Failed;
+            _vm.HintAnnounceVisibility = Visibility.Visible;
+            HintAnnounce.Theme = MyHint.Themes.Red;
+            _vm.HintAnnounceText = Lang.Text("Tools.GameLink.Error.ConnectFailed");
         });
     }
 

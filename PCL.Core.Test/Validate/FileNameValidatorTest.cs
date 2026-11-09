@@ -13,6 +13,7 @@ public class FileNameValidatorTest
     [DataRow("foobar.txt", true)]
     [DataRow("CON.tar.gz", true)]
     [DataRow("LPT²", false)]
+    [DataRow("con.txt", false)]
     [DataRow(" Test", false)]
     [DataRow("?foo.", false)]
     [DataRow("""\/:*?"<>|""", false)]

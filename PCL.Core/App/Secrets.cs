@@ -1,3 +1,4 @@
+using System;
 using PCL.Core.Utils.Exts;
 using PCL.Core.Utils.OS;
 
@@ -34,7 +35,8 @@ public static class Secrets
     /// <summary>
     /// 联机根服务器
     /// </summary>
-    public static string[] LinkServers { get; } = EnvironmentInterop.GetSecret("LINK_SERVER_ROOT", readEnvDebugOnly: true).ReplaceNullOrEmpty().Split("|");
+    public static string[] LinkServers { get; } = EnvironmentInterop.GetSecret("LINK_SERVER_ROOT", readEnvDebugOnly: true)
+        .ReplaceNullOrEmpty().Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     /// <summary>
     /// 当前版本的 Git 提交 SHA

@@ -10,6 +10,18 @@ public class BlacklistValidatorTest
     public TestContext TestContext { get; set; }
 
     [TestMethod]
+    public void RepeatedValidationDoesNotDuplicateFailures()
+    {
+        var validator = new BlacklistValidator(["blocked"]);
+        for (var i = 0; i < 3; i++)
+        {
+            var result = validator.Validate("blocked");
+            Assert.HasCount(1, result.Errors);
+            Assert.IsFalse(string.IsNullOrWhiteSpace(result.Errors[0].ErrorMessage));
+        }
+    }
+
+    [TestMethod]
     [DataRow("", true)]
     [DataRow(" ", true)]
     [DataRow("葱包99", true)]

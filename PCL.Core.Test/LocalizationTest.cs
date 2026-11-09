@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Windows;
 using System.Xml.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PCL.Core.App.Localization;
+using PCL.Core.Wpf;
 
 namespace PCL.Core.Test;
 
@@ -16,18 +18,31 @@ public class LocalizationTest
         .Select(language => language.Code)
         .ToArray();
 
-    [TestMethod]
-    public void AllLanguageDictionariesShouldContainBaseKeys()
+    [STATestMethod]
+    public void LanguageResourcesUseTranslationsAndFallBackToBaseKeys()
     {
-        var baseKeys = LoadKeys("zh-CN");
-
-        foreach (var language in LanguageFiles.Where(language => language != "zh-CN"))
+        var app = new Application();
+        try
         {
-            var keys = LoadKeys(language);
-            var missing = baseKeys.Except(keys).ToArray();
-
-            Assert.IsEmpty(missing, $"{language} 缺少语言键：{string.Join(", ", missing)}");
+            var backend = new WpfLocalizationBackend();
+            var baseLanguage = LocalizationService.DefaultLanguageCode;
+            backend.ApplyLanguageResources(baseLanguage, null);
+            var baseValues = LoadKeys(baseLanguage).ToDictionary(key => key, backend.TryFindResource);
+            foreach (var language in LanguageFiles.Where(language => language != baseLanguage))
+            {
+                backend.ApplyLanguageResources(baseLanguage, language);
+                Assert.AreEqual(language, backend.TryFindResource("Meta.Code"));
+                var translated = LoadKeys(language);
+                foreach (var (key, value) in baseValues)
+                {
+                    Assert.IsNotNull(value, key);
+                    var actual = backend.TryFindResource(key);
+                    Assert.IsNotNull(actual, $"{language}: {key}");
+                    if (!translated.Contains(key)) Assert.AreEqual(value, actual, $"{language}: {key}");
+                }
+            }
         }
+        finally { app.Shutdown(); }
     }
 
 
@@ -67,7 +82,7 @@ public class LocalizationTest
         {
             CultureInfo.GetCultureInfo(language.CultureName);
 
-            var filePath = Path.Combine(GetRepositoryRoot(), "PCL.Core", "App", "Localization", "Languages",
+            var filePath = Path.Combine(GetRepositoryRoot(), "PCL.Core.Wpf", "App", "Localization", "Languages",
                 language.Code + ".xaml");
             Assert.IsTrue(File.Exists(filePath), $"{language.Code} 缺少语言资源文件");
         }
@@ -119,7 +134,7 @@ public class LocalizationTest
 
     private static string[] LoadKeyList(string language)
     {
-        var filePath = Path.Combine(GetRepositoryRoot(), "PCL.Core", "App", "Localization", "Languages",
+        var filePath = Path.Combine(GetRepositoryRoot(), "PCL.Core.Wpf", "App", "Localization", "Languages",
             language + ".xaml");
         var document = XDocument.Load(filePath);
         var keyAttributeName = XName.Get("Key", "http://schemas.microsoft.com/winfx/2006/xaml");
